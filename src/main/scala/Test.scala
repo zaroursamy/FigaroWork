@@ -16,7 +16,7 @@ import java.util.UUID
 import com.cra.figaro.language._
 import com.cra.figaro.algorithm.sampling._
 import com.cra.figaro.library.atomic.continuous.{Normal, Uniform}
-import com.cra.figaro.library.atomic.discrete.AtomicUniform
+import com.cra.figaro.library.atomic.discrete.{AtomicUniform, SwitchingFlip}
 import com.cra.figaro.library.collection.Container
 import com.cra.figaro.library.compound._
 
@@ -201,11 +201,6 @@ object Test {
           Uniform(0.0, 10.0))
       }
 
-      val arrSources = Array.fill(200)(new Source(math.random.toString)).toList
-      val arrSamples - new Sample{
-        override val fromSource: Element[Source] = Select((1 to 200).map(x => 1/200->arrSources(x)).toSeq:_*)
-      }
-
       val source1 = new Source("Source 1")
       val source2 = new Source("Source 2")
       val sample1 = new Sample {
@@ -213,7 +208,120 @@ object Test {
       }
 
       val pair1 = Pair(source1, sample1)
+      val pair2 = Pair(source2, sample1)
+
+      pair1.distance.setCondition((d: Double) => d > 0.15 && d < 0.25)
+      pair2.distance.setCondition((d: Double) => d > 1.45 && d < 2.55)
+
 
     }
+
+    def actors = {
+      import com.cra.figaro.library.compound.CPD
+      import com.cra.figaro.language._
+
+      case class Actor(name: String) {
+        val famous = Flip(0.1)
+      }
+      case class Movie(name: String) {
+        val quality = Select(0.3 -> 'low, 0.5 -> 'medium, 0.2 -> 'high)
+      }
+
+      class Apparence(actor: Actor, movie: Movie) {
+
+        def probAward(quality: Symbol, famous: Boolean) = (quality, famous) match {
+          case ('low, false) => 0.001
+          case ('low, true) => 0.01
+          case ('medium, false) => 0.01
+          case ('medium, true) => 0.05
+          case ('high, false) => 0.05
+          case ('high, true) => 0.2
+        }
+
+        val award = SwitchingFlip(
+          Apply(movie.quality,
+            actor.famous,
+            probAward))
+      }
+
+
+      val actor1 = new Actor("sylvester")
+      val actor2 = new Actor("jason")
+      val actor3 = new Actor("arnold")
+
+      val movie1 = new Movie("Rambo")
+      val movie2 = new Movie("Expandables 1")
+
+      val ap1 = new Apparence(actor1, movie1)
+      val ap2 = new Apparence(actor2, movie2)
+      val ap3 = new Apparence(actor3, movie2)
+
+
+      val aps: Seq[Apparence] = ap1 :: ap2 :: ap3 :: Nil
+      actor3.famous.observe(true)
+      movie2.quality.observe('high)
+
+      // Ensure that exactly one appearance gets an award.
+      def uniqueAwardCondition(awards: List[Boolean]) = awards.count((b: Boolean) => b) == 1
+
+      val allAwards: Element[List[Boolean]] = Inject(aps.map(_.award): _*)
+
+      allAwards.setCondition(uniqueAwardCondition)
+
+
+    }
+
+    def actors2 = {
+      import com.cra.figaro.library.compound.CPD
+      import com.cra.figaro.language._
+
+      class Actor {
+        var movies: List[Movie] = Nil
+        lazy val skillful = Flip(0.1)
+        lazy val qualities = Container(movies.map(_.quality): _*)
+        lazy val numGoodMovies = qualities.count(_ == 'high)
+        lazy val famous = Chain(numGoodMovies, (n: Int) =>
+          if (n >= 2) Flip(0.8) else Flip(0.1))
+      }
+
+      class Movie {
+        var actors: List[Actor] = Nil
+        lazy val skills = Container(actors.map(_.skillful): _*)
+        lazy val actorsAllGood = skills.exists(b => b)
+        lazy val probLow = Apply(actorsAllGood, (b: Boolean) => if (b) 0.2; else 0.5)
+        lazy val probHigh = Apply(actorsAllGood, (b: Boolean) => if (b) 0.5; else 0.2)
+        lazy val quality = Select(probLow -> 'low, Constant(0.3) -> 'medium, probHigh -> 'high)
+      }
+
+    }
+
+    def engines = {
+
+    }
+      import com.cra.figaro.library.atomic.discrete._
+      import com.cra.figaro.language._
+
+      abstract class Engine extends ElementCollection {
+        val power: Element[Symbol]
+      }
+      class V8 extends Engine {
+        val power = Select(0.8 -> 'low, 0.2 -> 'high)("power", this)
+      }
+      class V6 extends Engine {
+        val power = Select(0.8 -> 'low, 0.2 -> 'high)("power", this)
+      }
+      object MySuperEngine extends V8 {
+        override val power = Constant('high)("power", this)
+      }
+      class Car extends ElementCollection {
+        val engine = Uniform[Engine](new V8, new V6, MySuperEngine)("engine", this)
+        val speed = CPD(get[Symbol]("engine.power"),
+          'high -> Constant(90.0),
+          'medium -> Constant(80.0),
+          'low -> Constant(70.0))
+      }
+
+    }
+
   }
-}
+
