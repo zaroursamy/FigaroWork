@@ -295,9 +295,7 @@ object Test {
 
     }
 
-    def engines = {
-
-    }
+    def cars = {
       import com.cra.figaro.library.atomic.discrete._
       import com.cra.figaro.language._
 
@@ -305,23 +303,76 @@ object Test {
         val power: Element[Symbol]
       }
       class V8 extends Engine {
-        val power = Select(0.8 -> 'low, 0.2 -> 'high)("power", this)
+        val power: AtomicSelect[Symbol] = Select(0.8 -> 'low, 0.2 -> 'high)("power", this)
       }
       class V6 extends Engine {
         val power = Select(0.8 -> 'low, 0.2 -> 'high)("power", this)
       }
       object MySuperEngine extends V8 {
-        override val power = Constant('high)("power", this)
+        override val power = Select(1.0 -> 'high)("pwover", this)
       }
+
       class Car extends ElementCollection {
-        val engine = Uniform[Engine](new V8, new V6, MySuperEngine)("engine", this)
+        val engine = com.cra.figaro.library.atomic.discrete.Uniform[Engine](new V8, new V6, MySuperEngine)("engine", this)
         val speed = CPD(get[Symbol]("engine.power"),
           'high -> Constant(90.0),
           'medium -> Constant(80.0),
           'low -> Constant(70.0))
       }
 
+      (0 to 100).map { x => (new Car).speed.generateValue()
+      }.groupBy(x => x)
+        .map(x => (x._1, x._2.size))
+        .foreach(println)
+
+    }
+
+    def components = {
+
+      import com.cra.figaro.language._
+      import com.cra.figaro.util.MultiSet
+      class Component extends ElementCollection {
+        val f = Select(0.2 -> 2, 0.3 -> 3, 0.5 -> 5)("f", this)
+      }
+
+      val comp1 = new Component
+      comp1.f.setCondition(x => x <= 3)
+      val comp2 = new Component
+
+      def makeComponent(): AtomicSelect[Component] = Select(0.1 -> comp1, 0.2 -> comp2, 0.7 -> new Component)
+
+
+      class Container extends ElementCollection {
+
+        val components: MakeList[Component] = MakeList(Select(0.5 -> 1, 0.5 -> 2), makeComponent)("f", this)
+
+        val sum: Aggregate[Int, Int] = getAggregate((xs: MultiSet[Int]) => (0 /: xs) (_ + _))("components.f")
+
+        // si un component apparait deux fois dans la liste, avec valeur 1, alors sum=1 et pas   2 : il ne compte qu'une fois
+      }
     }
 
   }
+}
 
+
+object Chapitre5 {
+
+  def main(args: Array[String]): Unit = {
+
+    import com.cra.figaro.algorithm._
+    val values: Values = Values()
+
+
+    val e1 = Flip(0.7)
+
+    println(values(e1)) // Set(true, false)
+
+    val e2 = If(e1, Select(0.2 -> 2, 0.8->8), Select(0.5->1, 0.3->3, 0.2->2))
+
+    val v2 = Values()(e2)
+    println(s"e2 possible values: ${values(e2)}")
+    println(s"e2 possible values: $v2")
+
+  }
+}
