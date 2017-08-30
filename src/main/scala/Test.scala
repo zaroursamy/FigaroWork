@@ -11,16 +11,18 @@
  * See http://www.github.com/p2t2/figaro for a copy of the software license.
  */
 
-import java.util.UUID
-
-import com.cra.figaro.language._
+import com.cra.figaro.algorithm.factored.{ProbQueryVariableElimination, VariableElimination}
 import com.cra.figaro.algorithm.sampling._
+import com.cra.figaro.language._
 import com.cra.figaro.library.atomic.continuous.{Normal, Uniform}
 import com.cra.figaro.library.atomic.discrete.{AtomicUniform, SwitchingFlip}
 import com.cra.figaro.library.collection.Container
 import com.cra.figaro.library.compound._
 
 object Test {
+
+
+
   def main(args: Array[String]) {
 
 
@@ -106,6 +108,9 @@ object Test {
         (true, false) -> Flip(0.9),
         (true, true) -> Flip(0.99)
       )
+
+
+
 
       //      (1 to 1000).foreach{num =>
       //        val algAlarm = Importance(num, alarm)
@@ -217,7 +222,6 @@ object Test {
     }
 
     def actors = {
-      import com.cra.figaro.library.compound.CPD
       import com.cra.figaro.language._
 
       case class Actor(name: String) {
@@ -272,7 +276,6 @@ object Test {
     }
 
     def actors2 = {
-      import com.cra.figaro.library.compound.CPD
       import com.cra.figaro.language._
 
       class Actor {
@@ -296,7 +299,6 @@ object Test {
     }
 
     def cars = {
-      import com.cra.figaro.library.atomic.discrete._
       import com.cra.figaro.language._
 
       abstract class Engine extends ElementCollection {
@@ -358,21 +360,88 @@ object Test {
 
 object Chapitre5 {
 
+  def printcustom(x:AnyRef) = {
+    println("***")
+    println(x)
+    println("***")
+  }
+
   def main(args: Array[String]): Unit = {
 
     import com.cra.figaro.algorithm._
     val values: Values = Values()
 
 
-    val e1 = Flip(0.7)
+    val e1: AtomicFlip = Flip(0.7)
 
-    println(values(e1)) // Set(true, false)
+    printcustom("possible values e1 " + values(e1)) // Set(true, false)
 
-    val e2 = If(e1, Select(0.2 -> 2, 0.8->8), Select(0.5->1, 0.3->3, 0.2->2))
+    val e2: If[Int] = If(e1, Select(0.2 -> 2, 0.8 -> 8), Select(0.5 -> 1, 0.3 -> 3, 0.2 -> 2))
 
-    val v2 = Values()(e2)
+    val v2: Set[Int] = Values()(e2)
+    println("***")
     println(s"e2 possible values: ${values(e2)}")
     println(s"e2 possible values: $v2")
+    println("***")
+
+    val f1: AtomicSelect[Double] = Select(0.25 -> 0.3, 0.25 -> 0.5, 0.25 -> 0.7, 0.25 -> 0.9)
+    val f2: Flip = Flip(f1)
+    val f3: If[Int] = If(f2, Select(0.3 -> 1, 0.7 -> 2), Constant(2))
+    f3.setCondition((i: Int) => i == 2)
+
+
+    /* variable elimination */
+    val ve: ProbQueryVariableElimination = VariableElimination(f2)
+
+    val ve3 = VariableElimination(f3)
+
+    ve.start()
+    val distribF2 = ve.distribution(f2)
+
+    printcustom("Distribution f2: ")
+    distribF2.foreach(println)
+
+
+    val probF2 = ve.probability(f2, (b: Boolean) => b) // Calcule la probabilité que f2 soit vrai
+    printcustom("P(f2=true) = " + probF2)
+    ve.kill()
+
+    ve3.start()
+    val probF3 = ve3.probability(f3, (i: Int) => i == 2)
+    printcustom("P(f3=2) = " + probF3)
+    ve3.kill()
+
+
+    /* Belief propagation */
+
+    import com.cra.figaro.algorithm.factored.beliefpropagation._
+    import com.cra.figaro.language._
+    val e1BP = Select(0.25 -> 0.3, 0.25 -> 0.5, 0.25 -> 0.7, 0.25 -> 0.9)
+    val e2BP = Flip(e1BP)
+    val e3BP = If(e2BP, Select(0.3 -> 1, 0.7 -> 2), Constant(2))
+//    e3BP.setCondition((i: Int) => i == 2)
+    val bp = BeliefPropagation(100, e3BP)
+
+    println("bp")
+
+    bp.start()
+    printcustom("P(e3BP=2) = " + bp.probability(e3BP, 2))
+    bp.kill()
+
+    println("Importance")
+    val imp = Importance(5000, e2BP)
+    imp.start()
+    Thread.sleep(1000)
+    imp.stop()
+    printcustom("P(e2BP=true) = " + imp.probability(e2BP, true))
+    imp.kill() // kill the thread
+
+    /* MCMC */
+
+
+
+
+
 
   }
 }
