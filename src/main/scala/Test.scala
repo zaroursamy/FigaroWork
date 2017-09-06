@@ -424,6 +424,10 @@ object Chapitre5 {
 
     println("bp")
 
+   val e2BPcomp= e2BP.flatMap(x => if(x) Select(0.9->"A", 0.1->"B") else Select(0.1->""))
+
+    val e2BPcompBis: If[String] = If(e2BP, Select(0.9->"A", 0.1->"B"), Select(0.1->""))
+
     bp.start()
     printcustom("P(e3BP=2) = " + bp.probability(e3BP, 2))
     bp.kill()
