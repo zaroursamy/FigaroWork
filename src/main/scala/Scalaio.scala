@@ -2,6 +2,7 @@ import com.cra.figaro.algorithm._
 import com.cra.figaro.algorithm.factored.beliefpropagation.BeliefPropagation
 import com.cra.figaro.algorithm.sampling.Importance
 import com.cra.figaro.language._
+import com.cra.figaro.library.atomic.continuous.Normal
 import com.cra.figaro.library.compound.{CPD, If}
 
 /**
@@ -15,10 +16,10 @@ object Scalaio {
 
     val (d1, d2, d3) = (Data('plombier, 'paris, 1), Data('plombier, 'marseille, 2), Data('boulanger, 'marseille, 3))
 
-    val data = Seq(d1,d2,d3)
+    val data = Seq(d1, d2, d3)
 
 
-    val an9 = Select(data.count(_.an9=='plombier).toDouble/3 -> 'plombier, 0.6 -> 'boulanger)
+    val an9 = Select(data.count(_.an9 == 'plombier).toDouble / 3 -> 'plombier, 0.6 -> 'boulanger)
 
     val loc = If(Flip(0.2), 'marseille, 'paris)
     //If(Flip(0.8), "paris", "marseille")
@@ -50,6 +51,28 @@ object Scalaio {
     println(Values()(isClicked))
     algoMix.start()
     println(algoMix.probability(isClicked, true))
+
+
+  }
+}
+
+object Main {
+  def main(args: Array[String]): Unit = {
+
+
+    val photo = Select(0.5 -> 'jolie, 0.3 -> 'aucune, 0.2 -> 'moyenne)
+
+    val isClicked = Chain(photo, (p:Symbol) => p match {
+      case 'jolie => Flip(Normal(0.8, 0.01))
+      case 'aucune => Flip(0.005)
+      case 'moyenne => Flip(0.05)
+    })
+
+    println(BeliefPropagation.probability(isClicked, true))
+
+    photo.observe('jolie)
+
+    println(BeliefPropagation.probability(isClicked, true))
 
 
   }
